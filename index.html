@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>不夜城网吧：通宵纪行 CyberCafé: All-Night</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Share+Tech+Mono&display=swap');
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: #050508;
+  overflow: hidden;
+  font-family: 'Share Tech Mono', monospace;
+  color: #00ff66;
+  cursor: default;
+  user-select: none;
+}
+
+canvas { display: block; }
+
+#title-screen {
+  position: fixed; top: 0; left: 0;
+  width: 100%; height: 100%;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  background: radial-gradient(ellipse at 50% 30%, #0d1b10 0%, #050508 70%);
+  z-index: 100; transition: opacity 1.5s ease;
+}
+
+.title-moon {
+  width: 140px; height: 100px; border-radius: 6px;
+  background: #0a0a14; border: 4px solid #00ff66;
+  box-shadow: 0 0 30px rgba(0, 255, 102, 0.3);
+  margin-bottom: 40px; position: relative;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; color: #00ff66;
+  animation: monitorFloat 4s ease-in-out infinite;
+}
+
+.title-moon::after {
+  content: ''; position: absolute; bottom: -15px;
+  width: 40px; height: 15px; background: #00ff66;
+  clip-path: polygon(20% 0%, 80% 0%, 100% 100%, 0% 100%);
+}
+
+@keyframes monitorFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+.title-text {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 32px; color: #00ff66; letter-spacing: 2px;
+  margin-bottom: 12px; text-shadow: 0 0 20px rgba(0, 255, 102, 0.5);
+  text-align: center;
+}
+
+.title-sub { font-size: 16px; color: #00aaaa; letter-spacing: 3px; margin-bottom: 50px; }
+
+.start-btn {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 16px; color: #050508; background: #00ff66;
+  border: none; padding: 16px 40px; cursor: pointer; pointer-events: all;
+  box-shadow: 0 0 15px rgba(0, 255, 102, 0.4); transition: all 0.3s ease;
+}
+
+.start-btn:hover { background: #ffffff; box-shadow: 0 0 25px #ffffff; transform: scale(1.05); }
+
+#hud {
+  position: fixed; top: 20px; left: 20px;
+  display: none; flex-direction: column; gap: 8px;
+  z-index: 20; pointer-events: none;
+}
+
+.hud-item { display: flex; align-items: center; gap: 12px; font-family: 'Press Start 2P', monospace; font-size: 16px; }
+.hud-icon-redbull { width: 12px; height: 20px; background: #1133aa; border: 2px solid #ff3366; }
+.hud-icon-disk { width: 18px; height: 18px; background: #00ffff; border-radius: 2px; }
+
+#controls-hint {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+  font-size: 14px; color: #005533; letter-spacing: 2px; z-index: 20;
+  display: none; pointer-events: none;
+}
+
+#game-over-screen, #win-screen {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  display: none; flex-direction: column; align-items: center; justify-content: center;
+  z-index: 300;
+}
+#game-over-screen { background: rgba(15, 5, 5, 0.9); }
+#win-screen { background: radial-gradient(ellipse at 50% 40%, #062018 0%, #03080c 75%); }
+
+/* 像素剧情对话框 */
+#dialogue-box {
+  position: fixed; left: 50%; bottom: 40px; transform: translateX(-50%);
+  width: min(760px, 90%); background: rgba(5, 8, 12, 0.92);
+  border: 3px solid #00ff66; box-shadow: 0 0 25px rgba(0, 255, 102, 0.35);
+  padding: 18px 22px; display: none; z-index: 250; cursor: pointer;
+}
+#dialogue-name { font-family: 'Press Start 2P', monospace; font-size: 13px; color: #00ff66; margin-bottom: 12px; }
+#dialogue-text { font-size: 18px; color: #cdeccd; line-height: 1.6; letter-spacing: 1px; min-height: 30px; }
+#dialogue-tip { margin-top: 12px; font-size: 12px; color: #44665a; text-align: right; }
+</style>
+</head>
+<body>
+
+<div id="title-screen">
+  <div class="title-moon">PING: 12ms</div>
+  <div class="title-text">不夜城网吧<br><span style="font-size:20px">通宵纪行</span></div>
+  <div class="title-sub">CyberCafé: All-Night</div>
+  <button class="start-btn" onclick="startGame()">刷卡开机</button>
+</div>
+
+<canvas id="game"></canvas>
+
+<div id="hud">
+  <div class="hud-item" id="hud-level1" style="color: #00ff66;">
+    <div class="hud-icon-redbull"></div>
+    <span>红牛补给: <span id="fragment-count">0 / 6</span></span>
+  </div>
+  <div class="hud-item" id="hud-timer" style="display:none; color:#ffcc00;">
+    <span>⏱ 天亮倒计时: <span id="timer-count">90</span>s</span>
+  </div>
+  <div class="hud-item" id="hud-level2" style="display: none; color: #ff00ff;">
+    <div class="hud-icon-disk"></div>
+    <span>解密核心: <span id="disk-count">0 / 5</span></span>
+  </div>
+  <div class="hud-item" id="hud-level3" style="display: none; color: #ff5577;">
+    <span>⚠ 数据已窃取 — 全速逃离机房！</span>
+  </div>
+</div>
+
+<div id="controls-hint">← → / A D 移动 · ↑ / Space 跳跃</div>
+
+<div id="game-over-screen">
+  <div class="title-text" style="color: #ff3333; text-shadow: 0 0 20px #ff0000;">SYSTEM ERROR</div>
+  <div class="title-sub" id="game-over-msg" style="color: #ff8888;">被防火墙拦截，入侵失败</div>
+  <button class="start-btn" style="background: #ff3333; box-shadow: 0 0 15px #ff0000;" onclick="restartLevel()">重连内网</button>
+</div>
+
+<div id="win-screen">
+  <div class="title-text" style="color: #00ffcc; text-shadow: 0 0 20px #00ff88;">DATA SECURED</div>
+  <div class="title-sub" style="color: #aaffee;">你带着核心数据消失在黎明 —— 通宵纪行 · 完</div>
+  <button class="start-btn" style="background:#00ffcc; box-shadow:0 0 15px #00ff88;" onclick="window.location.reload()">再来一夜</button>
+</div>
+
+<div id="dialogue-box">
+  <div id="dialogue-name"></div>
+  <div id="dialogue-text"></div>
+  <div id="dialogue-tip">▼ 点击 / 空格 继续</div>
+</div>
+
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+let W, H;
+
+function resize() {
+  W = canvas.width = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+const C = {
+  ground: '#14141f', groundLine: '#00ff66',
+  l2Ground: '#200a18', l2Text: '#ff3366'
+};
+
+let currentLevel = 1;
+const keys = {};
+window.addEventListener('keydown', e => {
+  keys[e.key] = true;
+  // 对话框打开时，空格/回车推进剧情
+  if (document.getElementById('dialogue-box').style.display === 'block') {
+    if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); advanceDialogue(); }
+    return;
+  }
+  if (['ArrowUp','ArrowDown',' '].includes(e.key)) e.preventDefault();
+});
+window.addEventListener('keyup', e => { keys[e.key] = false; });
+
+let camX = 0;
+const LEVEL_WIDTH = 4000;
+let groundY = H * 0.78;
+const platforms = [];
+const fragments = [];
+const enemies = [];
+const guards = [];
+const TOTAL_FRAGMENTS = 6;
+const TOTAL_DISKS = 5;
+let collectedFragments = 0;
+let collectedDisks = 0;
+let gameRunning = false;
+
+// 潜入 / 逃脱相关状态
+const VISION_LEN = 250;
+let globalAlert = 0;
+let levelTimeLeft = 0;
+let timerActive = false;
+let lastTimestamp = 0;
+let exitX = LEVEL_WIDTH - 140;
+const chaseWall = { x: -260, speed: 2.0 };
+
+// ============ ENTITIES ============
+const hackerGirl = {
+  x: 100, y: 0, w: 36, h: 56,
+  vx: 0, vy: 0, onGround: false, facing: 1,
+  walkFrame: 0, wireFrame: 0
+};
+const cafeCat = { x: 60, y: 0, w: 22, h: 16, vx: 0, vy: 0, onGround: false, facing: 1 };
+
+const GRAVITY = 0.55;
+const JUMP_FORCE = -13.5;
+const MOVE_SPEED = 5;
+const FRICTION = 0.85;
+
+function generateLevel() {
+  groundY = H * 0.78;
+  platforms.length = 0;
+  fragments.length = 0;
+  enemies.length = 0;
+  guards.length = 0;
+  collectedFragments = 0;
+  collectedDisks = 0;
+
+  platforms.push({ x: -200, y: groundY, w: LEVEL_WIDTH + 400, h: 300, isGround: true });
+
+  if (currentLevel === 1) {
+    [
+      { x: 350, y: groundY - 100, w: 180, h: 16 },
+      { x: 650, y: groundY - 190, w: 160, h: 16 },
+      { x: 950, y: groundY - 120, w: 180, h: 16 },
+      { x: 1250, y: groundY - 210, w: 150, h: 16 },
+      { x: 1550, y: groundY - 130, w: 180, h: 16 },
+      { x: 1900, y: groundY - 220, w: 160, h: 16 },
+      { x: 2250, y: groundY - 110, w: 200, h: 16 },
+      { x: 2550, y: groundY - 200, w: 150, h: 16 },
+      { x: 2850, y: groundY - 120, w: 180, h: 16 },
+      { x: 3200, y: groundY - 210, w: 160, h: 16 }
+    ].forEach(p => platforms.push(p));
+
+    [
+      { x: 440, y: groundY - 140 }, { x: 730, y: groundY - 230 },
+      { x: 1320, y: groundY - 250 }, { x: 1640, y: groundY - 40 },
+      { x: 2350, y: groundY - 150 }, { x: 2940, y: groundY - 160 }
+    ].forEach((f, i) => fragments.push({ x: f.x, y: f.y, collected: false, id: i, bobOffset: Math.random() * Math.PI * 2 }));
+
+    // 巡场网管（带视野锥）
+    [{ minX: 820, maxX: 1380 }, { minX: 1850, maxX: 2450 }, { minX: 2900, maxX: 3500 }].forEach(r => {
+      guards.push({ x: (r.minX + r.maxX) / 2, y: groundY, w: 24, minX: r.minX, maxX: r.maxX,
+                    dir: Math.random() > 0.5 ? 1 : -1, speed: 1.3 + Math.random() * 0.5, alert: 0 });
+    });
+
+  } else if (currentLevel === 2) {
+    [
+      { x: 300, y: groundY - 120, w: 150, h: 16 }, { x: 550, y: groundY - 220, w: 150, h: 16 },
+      { x: 800, y: groundY - 140, w: 200, h: 16 }, { x: 1100, y: groundY - 240, w: 140, h: 16 },
+      { x: 1400, y: groundY - 130, w: 160, h: 16 }, { x: 1700, y: groundY - 230, w: 180, h: 16 },
+      { x: 2000, y: groundY - 120, w: 150, h: 16 }
+    ].forEach(p => platforms.push(p));
+
+    [
+      { x: 370, y: groundY - 160 }, { x: 620, y: groundY - 260 }, { x: 900, y: groundY - 180 },
+      { x: 1170, y: groundY - 280 }, { x: 1790, y: groundY - 270 }
+    ].forEach((d, i) => fragments.push({ x: d.x, y: d.y, collected: false, id: i, bobOffset: Math.random() * Math.PI * 2 }));
+
+  } else { // 第三关：逃脱关，无收集物，靠跑酷躲避追击
+    [
+      { x: 400, y: groundY - 110, w: 140, h: 16 }, { x: 700, y: groundY - 180, w: 120, h: 16 },
+      { x: 1000, y: groundY - 120, w: 160, h: 16 }, { x: 1350, y: groundY - 200, w: 120, h: 16 },
+      { x: 1650, y: groundY - 130, w: 160, h: 16 }, { x: 2000, y: groundY - 190, w: 120, h: 16 },
+      { x: 2350, y: groundY - 120, w: 180, h: 16 }, { x: 2750, y: groundY - 200, w: 140, h: 16 },
+      { x: 3100, y: groundY - 130, w: 160, h: 16 }, { x: 3500, y: groundY - 180, w: 160, h: 16 }
+    ].forEach(p => platforms.push(p));
+    exitX = LEVEL_WIDTH - 140;
+  }
+}
+
+const matrixDots = [];
+function generateMatrixBackground() {
+  matrixDots.length = 0;
+  for (let i = 0; i < 120; i++) {
+    matrixDots.push({
+      x: Math.random() * LEVEL_WIDTH, y: Math.random() * groundY,
+      speed: Math.random() * 1.5 + 0.5, char: Math.random() > 0.5 ? '1' : '0'
+    });
+  }
+}
+
+// ============ 渲染黑客少女（双马尾 · 短裤 · 凸显女性轮廓，已移除绿色连线） ============
+function drawHackerGirl(x, y, facing, wireFrame, walkFrame) {
+  const sx = x - camX;
+  ctx.save();
+  ctx.translate(sx + 18, y);
+  if (facing < 0) ctx.scale(-1, 1);
+
+  const bob = Math.abs(Math.sin(walkFrame)) * 2;
+  const accent = currentLevel === 1 ? '#00ff66' : '#ff00ff';
+  const hairWave = Math.sin(wireFrame * 1.5) * 3;
+  const skin = '#ffd9c7';
+
+  // 不对称短发（波波头 + 霓虹挑染，去掉刻板双马尾）
+  const hairDark = '#241f2b';
+  ctx.fillStyle = hairDark;
+  ctx.fillRect(-10, 0 - bob, 20, 9);                 // 头顶发量
+  ctx.fillRect(-10, 6 - bob, 5, 12);                 // 左鬓：齐下巴的短发
+  ctx.fillRect(6, 6 - bob, 5, 8);                    // 右侧：推短的一边
+  ctx.fillRect(-8, 5 - bob, 14, 4);                  // 斜刘海
+  ctx.fillRect(-11, 6 - bob, 3, 8 + Math.max(0, hairWave)); // 随动作轻摆的碎发
+  // 挑染高光
+  ctx.fillStyle = accent;
+  ctx.fillRect(-11, 1 - bob, 3, 13);                 // 左侧挑染一缕
+  ctx.fillRect(6, 12 - bob, 5, 2);                   // 右侧推剪线条
+
+  // 脸
+  ctx.fillStyle = skin;
+  ctx.fillRect(-5, 7 - bob, 11, 11);
+  ctx.fillStyle = '#ff9bb3';
+  ctx.fillRect(-4, 13 - bob, 2, 2);
+  ctx.fillRect(4, 13 - bob, 2, 2);
+  ctx.fillStyle = '#0a0a14';
+  ctx.fillRect(-4, 9 - bob, 4, 4);
+  ctx.fillRect(2, 9 - bob, 4, 4);
+  ctx.fillStyle = accent;
+  ctx.fillRect(-3, 10 - bob, 2, 2);
+  ctx.fillRect(3, 10 - bob, 2, 2);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(-3, 10 - bob, 1, 1);
+  ctx.fillRect(3, 10 - bob, 1, 1);
+  ctx.fillStyle = '#c84d6a';
+  ctx.fillRect(-1, 15 - bob, 3, 1);
+
+  // 脖子
+  ctx.fillStyle = skin;
+  ctx.fillRect(-2, 18 - bob, 5, 3);
+
+  // 紧身短上衣（收腰露脐）
+  ctx.fillStyle = currentLevel === 1 ? '#1c2230' : '#301028';
+  ctx.fillRect(-8, 20 - bob, 16, 4);
+  ctx.fillRect(-7, 24 - bob, 14, 5);
+  ctx.fillStyle = accent;
+  ctx.fillRect(-8, 20 - bob, 16, 1);
+  ctx.fillRect(-1, 21 - bob, 1, 7);
+  ctx.fillStyle = skin;
+  ctx.fillRect(-5, 29 - bob, 10, 3);
+
+  // 手臂
+  ctx.fillStyle = skin;
+  ctx.fillRect(-10, 21 - bob, 3, 9);
+  ctx.fillRect(8, 21 - bob, 3, 9);
+
+  // 牛仔短裤
+  ctx.fillStyle = '#2a5db0';
+  ctx.fillRect(-7, 31 - bob, 14, 7);
+  ctx.fillStyle = '#1a3f80';
+  ctx.fillRect(-1, 31 - bob, 1, 7);
+  ctx.fillStyle = accent;
+  ctx.fillRect(-7, 31 - bob, 14, 1);
+
+  // 裸露双腿
+  ctx.fillStyle = skin;
+  ctx.fillRect(-6, 38 - bob, 5, 13);
+  ctx.fillRect(2, 38 - bob, 5, 13);
+
+  // 运动鞋
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(-7, 50 - bob, 7, 5);
+  ctx.fillRect(2, 50 - bob, 7, 5);
+  ctx.fillStyle = accent;
+  ctx.fillRect(-7, 54 - bob, 7, 1);
+  ctx.fillRect(2, 54 - bob, 7, 1);
+
+  ctx.restore();
+}
+
+// ============ ENGINE PHYSICS ============
+function updateEntities() {
+  let moveInput = 0;
+  if (keys['ArrowLeft'] || keys['a']) moveInput = -1;
+  if (keys['ArrowRight'] || keys['d']) moveInput = 1;
+
+  if (moveInput !== 0) {
+    hackerGirl.vx += moveInput * 1.4;
+    hackerGirl.facing = moveInput;
+    hackerGirl.walkFrame += 0.2;
+  } else {
+    hackerGirl.vx *= 0.75;
+    hackerGirl.walkFrame = 0;
+  }
+
+  hackerGirl.vx *= FRICTION;
+  if (Math.abs(hackerGirl.vx) > MOVE_SPEED) hackerGirl.vx = MOVE_SPEED * Math.sign(hackerGirl.vx);
+
+  if ((keys['ArrowUp'] || keys['w'] || keys[' ']) && hackerGirl.onGround) {
+    hackerGirl.vy = JUMP_FORCE;
+    hackerGirl.onGround = false;
+  }
+
+  hackerGirl.vy += GRAVITY;
+  hackerGirl.x += hackerGirl.vx;
+  hackerGirl.y += hackerGirl.vy;
+
+  if (hackerGirl.x < 0) hackerGirl.x = 0;
+  if (hackerGirl.x > LEVEL_WIDTH - hackerGirl.w) hackerGirl.x = LEVEL_WIDTH - hackerGirl.w;
+
+  hackerGirl.onGround = false;
+  platforms.forEach(p => {
+    if (hackerGirl.x + hackerGirl.w > p.x && hackerGirl.x < p.x + p.w &&
+        hackerGirl.y + hackerGirl.h > p.y && hackerGirl.y + hackerGirl.h < p.y + p.h + 10 &&
+        hackerGirl.vy >= 0) {
+      hackerGirl.y = p.y - hackerGirl.h;
+      hackerGirl.vy = 0;
+      hackerGirl.onGround = true;
+    }
+  });
+
+  hackerGirl.wireFrame += 0.15;
+
+  // 猫跟随
+  const dx = hackerGirl.x - cafeCat.x;
+  if (Math.abs(dx) > 60) {
+    cafeCat.vx += (dx > 0 ? 1 : -1) * 0.6;
+    cafeCat.facing = dx > 0 ? 1 : -1;
+    if (Math.abs(cafeCat.vx) > 4) cafeCat.vx = 4 * Math.sign(cafeCat.vx);
+    if (hackerGirl.y + hackerGirl.h - cafeCat.h - cafeCat.y < -40 && cafeCat.onGround) {
+      cafeCat.vy = JUMP_FORCE * 0.8;
+      cafeCat.onGround = false;
+    }
+  } else {
+    cafeCat.vx *= 0.7;
+  }
+  cafeCat.vy += GRAVITY;
+  cafeCat.x += cafeCat.vx;
+  cafeCat.y += cafeCat.vy;
+  cafeCat.onGround = false;
+  platforms.forEach(p => {
+    if (cafeCat.x + cafeCat.w > p.x && cafeCat.x < p.x + p.w &&
+        cafeCat.y + cafeCat.h > p.y && cafeCat.y + cafeCat.h < p.y + p.h + 10 &&
+        cafeCat.vy >= 0) {
+      cafeCat.y = p.y - cafeCat.h;
+      cafeCat.vy = 0;
+      cafeCat.onGround = true;
+    }
+  });
+
+  // 第一关：网管巡逻 + 视野侦测
+  if (currentLevel === 1) {
+    let maxAlert = 0;
+    guards.forEach(g => {
+      g.x += g.dir * g.speed;
+      if (g.x < g.minX) { g.x = g.minX; g.dir = 1; }
+      if (g.x > g.maxX) { g.x = g.maxX; g.dir = -1; }
+
+      const coneA = g.dir > 0 ? g.x + g.w : g.x - VISION_LEN;
+      const coneB = g.dir > 0 ? g.x + g.w + VISION_LEN : g.x;
+      const seen = hackerGirl.x + hackerGirl.w > coneA && hackerGirl.x < coneB &&
+                   hackerGirl.y + hackerGirl.h > g.y - 58 && hackerGirl.y < g.y;
+      g.alert = seen ? Math.min(1, g.alert + 0.022) : Math.max(0, g.alert - 0.015);
+      if (g.alert >= 1) gameOver('被网管当场抓获 — 通宵失败');
+      maxAlert = Math.max(maxAlert, g.alert);
+    });
+    globalAlert = maxAlert;
+  }
+
+  // 第三关：防火墙墙体追击 + 抵达出口判定
+  if (currentLevel === 3) {
+    if (hackerGirl.x + hackerGirl.w >= exitX) { winGame(); return; }
+    chaseWall.x += chaseWall.speed;
+    chaseWall.speed += 0.0008;
+    if (chaseWall.x >= hackerGirl.x) gameOver('数据洪流防火墙吞没了你！');
+  }
+}
+
+function drawCat(x, y, facing) {
+  const sx = x - camX;
+  ctx.save();
+  ctx.translate(sx + 11, y);
+  if (facing < 0) ctx.scale(-1, 1);
+
+  const orange = '#ff8c3b', dark = '#d8631c', eye = currentLevel === 1 ? '#00ff66' : '#ff00ff';
+  const wag = Math.sin(Date.now() * 0.008) * 2;
+
+  // 翘起的尾巴（身后）
+  ctx.fillStyle = orange;
+  ctx.fillRect(-11, 3, 3, 9);
+  ctx.fillRect(-11 + wag, 1, 6, 3);
+
+  // 身体 + 四条腿
+  ctx.fillRect(-9, 6, 15, 8);
+  ctx.fillRect(-7, 13, 3, 3);
+  ctx.fillRect(2, 13, 3, 3);
+  // 虎斑纹
+  ctx.fillStyle = dark;
+  ctx.fillRect(-5, 6, 2, 8);
+  ctx.fillRect(-1, 6, 2, 8);
+
+  // 头
+  ctx.fillStyle = orange;
+  ctx.fillRect(4, 1, 10, 10);
+  // 两只三角耳朵
+  ctx.beginPath(); ctx.moveTo(4, 1); ctx.lineTo(5, -4); ctx.lineTo(9, 1); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(10, 1); ctx.lineTo(13, -4); ctx.lineTo(14, 1); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#ffc4a0';
+  ctx.fillRect(6, -1, 2, 2);
+  ctx.fillRect(11, -1, 2, 2);
+
+  // 发光的眼睛 + 鼻子
+  ctx.fillStyle = eye;
+  ctx.fillRect(10, 4, 2, 3);
+  ctx.fillStyle = '#3a2018';
+  ctx.fillRect(13, 7, 1, 1);
+
+  // 胡须
+  ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(13, 6); ctx.lineTo(17, 5);
+  ctx.moveTo(13, 8); ctx.lineTo(17, 9);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function drawGuards() {
+  guards.forEach(g => {
+    // 视野锥
+    const tipX = (g.dir > 0 ? g.x + g.w : g.x) - camX;
+    ctx.fillStyle = `rgba(255,45,65,${0.08 + g.alert * 0.4})`;
+    ctx.beginPath();
+    ctx.moveTo(tipX, g.y - 46);
+    ctx.lineTo(tipX + g.dir * VISION_LEN, g.y - 70);
+    ctx.lineTo(tipX + g.dir * VISION_LEN, g.y);
+    ctx.closePath();
+    ctx.fill();
+
+    // 身体
+    const sx = g.x - camX;
+    ctx.fillStyle = '#16263a'; ctx.fillRect(sx, g.y - 50, 24, 50);
+    ctx.fillStyle = '#22364f'; ctx.fillRect(sx, g.y - 50, 24, 4);
+    ctx.fillStyle = '#e8c0a0'; ctx.fillRect(sx + 5, g.y - 62, 14, 13);
+    ctx.fillStyle = '#0a1622'; ctx.fillRect(sx + 3, g.y - 66, 18, 6);
+    ctx.fillStyle = g.alert > 0.5 ? '#ff3333' : '#ffcc44';
+    ctx.fillRect(g.dir > 0 ? sx + 15 : sx + 5, g.y - 56, 4, 3);
+    ctx.fillStyle = '#ff3366'; ctx.fillRect(sx + 9, g.y - 40, 6, 3);
+
+    if (g.alert > 0.05) {
+      ctx.fillStyle = `rgba(255,60,60,${g.alert})`;
+      ctx.font = 'bold 22px monospace';
+      ctx.fillText('!', sx + 9, g.y - 72);
+    }
+  });
+
+  if (globalAlert > 0.02) {
+    const bw = 240, bx = W / 2 - bw / 2, by = 24;
+    ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(bx - 2, by - 2, bw + 4, 16);
+    ctx.fillStyle = globalAlert > 0.7 ? '#ff2222' : '#ffaa00';
+    ctx.fillRect(bx, by, bw * globalAlert, 12);
+    ctx.strokeStyle = '#ff5555'; ctx.lineWidth = 1; ctx.strokeRect(bx, by, bw, 12);
+    ctx.fillStyle = '#fff'; ctx.font = '10px monospace'; ctx.fillText('ALERT', bx, by - 4);
+  }
+}
+
+function drawEscape(time) {
+  // 出口
+  const dx = exitX - camX;
+  ctx.fillStyle = `rgba(0,255,180,${0.2 + Math.sin(time * 0.005) * 0.1})`;
+  ctx.fillRect(dx - 6, groundY - 96, 52, 96);
+  ctx.fillStyle = '#00ffcc'; ctx.fillRect(dx, groundY - 90, 40, 90);
+  ctx.fillStyle = '#003322'; ctx.fillRect(dx + 6, groundY - 78, 28, 78);
+  ctx.fillStyle = '#aaffee'; ctx.font = '10px monospace'; ctx.fillText('EXIT', dx + 8, groundY - 40);
+
+  // 追击中的防火墙墙体（左侧逼近）
+  const wx = chaseWall.x - camX;
+  if (wx > -50) {
+    const wg = ctx.createLinearGradient(0, 0, Math.max(wx, 1), 0);
+    wg.addColorStop(0, '#330008'); wg.addColorStop(1, 'rgba(255,0,40,0.85)');
+    ctx.fillStyle = wg; ctx.fillRect(0, 0, wx, H);
+    ctx.fillStyle = 'rgba(255,255,255,0.15)';
+    for (let i = 0; i < 14; i++) {
+      const yy = (i * H / 14 + time * 0.2) % H;
+      ctx.fillRect(wx - 30, yy, 30, 3);
+    }
+    ctx.save();
+    ctx.translate(wx - 12, H / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillStyle = '#ffffff'; ctx.font = 'bold 26px monospace';
+    ctx.fillText('FIREWALL', -70, 0);
+    ctx.restore();
+  }
+}
+
+// ============ SCENE RENDER ============
+function drawScene(time) {
+  const isL1 = currentLevel === 1;
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, isL1 ? '#020205' : '#080106');
+  grad.addColorStop(1, isL1 ? '#0a0a14' : '#14020f');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.fillStyle = isL1 ? '#003311' : '#330021';
+  ctx.font = '12px monospace';
+  matrixDots.forEach(s => {
+    const sx = s.x - camX * 0.15;
+    if (sx < -20 || sx > W + 20) return;
+    ctx.fillText(s.char, sx, (s.y + time * 0.03 * s.speed) % groundY);
+  });
+
+  ctx.fillStyle = isL1 ? '#070712' : '#150510';
+  for (let i = 0; i < 12; i++) ctx.fillRect((i * 400) - camX * 0.3, groundY - 140, 100, 140);
+
+  ctx.fillStyle = isL1 ? C.ground : C.l2Ground;
+  ctx.fillRect(0, groundY, W, H - groundY);
+  ctx.strokeStyle = isL1 ? C.groundLine : C.l2Text;
+  ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(0, groundY); ctx.lineTo(W, groundY); ctx.stroke();
+
+  platforms.forEach(p => {
+    if (p.isGround) return;
+    const px = p.x - camX;
+    ctx.fillStyle = isL1 ? '#222235' : '#401530';
+    ctx.fillRect(px, p.y, p.w, p.h);
+    ctx.fillStyle = isL1 ? '#00ffff' : '#ff00ff';
+    ctx.fillRect(px, p.y, p.w, 3);
+  });
+
+  fragments.forEach(f => {
+    if (f.collected) return;
+    const fx = f.x - camX;
+    const fy = f.y + Math.sin(time * 0.004 + f.bobOffset) * 5;
+    if (isL1) {
+      ctx.fillStyle = '#1133aa'; ctx.fillRect(fx, fy, 12, 20);
+      ctx.fillStyle = '#ff3366'; ctx.fillRect(fx + 3, fy + 4, 6, 12);
+    } else {
+      ctx.fillStyle = '#00ffff'; ctx.fillRect(fx, fy, 18, 18);
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(fx + 5, fy + 5, 8, 8);
+    }
+  });
+
+  if (currentLevel === 1) drawGuards();
+  if (currentLevel === 3) drawEscape(time);
+
+  // 掉落的报错方块（第二、三关）
+  if (!isL1) {
+    const rate = currentLevel === 3 ? 0.025 : 0.04;
+    if (Math.random() < rate) {
+      enemies.push({ x: hackerGirl.x + (Math.random() - 0.5) * W, y: -20, speed: Math.random() * 3 + 4, size: 40 });
+    }
+    enemies.forEach(e => {
+      e.y += e.speed;
+      const ex = e.x - camX;
+      ctx.fillStyle = '#ff0033'; ctx.fillRect(ex, e.y, e.size, 20);
+      ctx.fillStyle = '#ffffff'; ctx.font = '10px monospace'; ctx.fillText("!ERROR", ex + 2, e.y + 14);
+      if (hackerGirl.x + hackerGirl.w > e.x && hackerGirl.x < e.x + e.size &&
+          hackerGirl.y + hackerGirl.h > e.y && hackerGirl.y < e.y + 20) gameOver();
+    });
+  }
+}
+
+function checkCollection() {
+  fragments.forEach(f => {
+    if (f.collected) return;
+    const dx = (hackerGirl.x + hackerGirl.w / 2) - f.x;
+    const dy = (hackerGirl.y + hackerGirl.h / 2) - f.y;
+    if (Math.sqrt(dx * dx + dy * dy) < 35) {
+      f.collected = true;
+      if (currentLevel === 1) {
+        collectedFragments++;
+        document.getElementById('fragment-count').textContent = `${collectedFragments} / ${TOTAL_FRAGMENTS}`;
+        if (collectedFragments >= TOTAL_FRAGMENTS) {
+          gameRunning = false;
+          currentLevel = 2;
+          showDialogue(DLG.level2, initLevel);
+        }
+      } else {
+        collectedDisks++;
+        document.getElementById('disk-count').textContent = `${collectedDisks} / ${TOTAL_DISKS}`;
+        if (collectedDisks >= TOTAL_DISKS) {
+          gameRunning = false;
+          currentLevel = 3;
+          showDialogue(DLG.level3, initLevel);
+        }
+      }
+    }
+  });
+}
+
+function gameLoop(timestamp) {
+  if (!gameRunning) return;
+  if (lastTimestamp === 0) lastTimestamp = timestamp;
+  const dt = Math.min(0.05, (timestamp - lastTimestamp) / 1000);
+  lastTimestamp = timestamp;
+
+  if (timerActive) {
+    levelTimeLeft -= dt;
+    const tc = document.getElementById('timer-count');
+    if (tc) {
+      tc.textContent = Math.ceil(levelTimeLeft);
+      document.getElementById('hud-timer').style.color = levelTimeLeft < 15 ? '#ff3333' : '#ffcc00';
+    }
+    if (levelTimeLeft <= 0) { levelTimeLeft = 0; gameOver('天亮了！被早班网管逮个正着'); }
+  }
+
+  updateEntities();
+  if (!gameRunning) return;
+  checkCollection();
+
+  const targetCam = hackerGirl.x - W * 0.35;
+  camX += (targetCam - camX) * 0.08;
+  if (camX < 0) camX = 0;
+  if (camX > LEVEL_WIDTH - W) camX = LEVEL_WIDTH - W;
+
+  ctx.clearRect(0, 0, W, H);
+  drawScene(timestamp);
+  drawCat(cafeCat.x, cafeCat.y);
+  drawHackerGirl(hackerGirl.x, hackerGirl.y, hackerGirl.facing, hackerGirl.wireFrame, hackerGirl.walkFrame);
+
+  if (gameRunning) requestAnimationFrame(gameLoop);
+}
+
+// ============ 剧情对话系统 ============
+const DLG = {
+  intro: [
+    { name: '霓 / NIA', text: '凌晨三点……整条街只剩这家「不夜城」还亮着灯。' },
+    { name: '霓 / NIA', text: '机房深处那台主机，存着他们偷走的东西。今晚，我要拿回来。' },
+    { name: '橘猫 · 404', color: '#ff8833', text: '喵——（蹭了蹭你的脚踝，尾巴扫过地上的网线）' },
+    { name: '霓 / NIA', text: '天亮前必须搞定，别撞进巡场网管的视野里。走，404。' }
+  ],
+  level2: [
+    { name: '霓 / NIA', text: '物理线路接通了，机房的门也开了。' },
+    { name: '系统', color: '#ff3366', text: '警告：检测到异常登录，防御进程已唤醒。' },
+    { name: '霓 / NIA', text: '来就来。把五块加密核心全抠出来 —— 404，盯着上面掉下来的报错！' }
+  ],
+  level3: [
+    { name: '霓 / NIA', text: '数据到手！可是……整个内网开始反扑了。' },
+    { name: '系统', color: '#ff3366', text: '防火墙总进程已锁定目标，启动清除程序。' },
+    { name: '霓 / NIA', text: '别回头，全速冲向出口！它追上来就全完了！' }
+  ],
+  ending: [
+    { name: '霓 / NIA', text: '……出来了。霓虹灯下，天刚蒙蒙亮。' },
+    { name: '霓 / NIA', text: '数据安全了。谢谢你陪我跑完这一整夜，404。' },
+    { name: '橘猫 · 404', color: '#ff8833', text: '喵。（轻巧跳上你的肩膀）' }
+  ]
+};
+
+let dlgLines = [], dlgCb = null;
+function showDialogue(lines, cb) {
+  dlgLines = lines.slice();
+  dlgCb = cb || null;
+  document.getElementById('hud').style.display = 'none';
+  document.getElementById('dialogue-box').style.display = 'block';
+  advanceDialogue();
+}
+function advanceDialogue() {
+  const box = document.getElementById('dialogue-box');
+  if (dlgLines.length === 0) {
+    box.style.display = 'none';
+    const cb = dlgCb; dlgCb = null;
+    if (cb) cb();
+    return;
+  }
+  const line = dlgLines.shift();
+  const nameEl = document.getElementById('dialogue-name');
+  nameEl.textContent = line.name;
+  nameEl.style.color = line.color || '#00ff66';
+  document.getElementById('dialogue-text').textContent = line.text;
+}
+document.getElementById('dialogue-box').addEventListener('click', advanceDialogue);
+
+// ============ 流程控制 ============
+function setupHUD(level) {
+  ['hud-level1', 'hud-level2', 'hud-level3', 'hud-timer'].forEach(id => document.getElementById(id).style.display = 'none');
+  if (level === 1) { document.getElementById('hud-level1').style.display = 'flex'; document.getElementById('hud-timer').style.display = 'flex'; }
+  else if (level === 2) document.getElementById('hud-level2').style.display = 'flex';
+  else if (level === 3) document.getElementById('hud-level3').style.display = 'flex';
+}
+
+function startGame() {
+  document.getElementById('title-screen').style.display = 'none';
+  currentLevel = 1;
+  showDialogue(DLG.intro, initLevel);
+}
+
+function initLevel() {
+  resize();
+  generateLevel();
+  generateMatrixBackground();
+  hackerGirl.x = 100; hackerGirl.y = groundY - hackerGirl.h - 10; hackerGirl.vx = 0; hackerGirl.vy = 0;
+  cafeCat.x = 60; cafeCat.y = groundY - cafeCat.h - 10;
+  camX = 0;
+  globalAlert = 0;
+  lastTimestamp = 0;
+
+  timerActive = currentLevel === 1;
+  if (currentLevel === 1) levelTimeLeft = 90;
+  if (currentLevel === 3) { chaseWall.x = -260; chaseWall.speed = 2.0; }
+
+  setupHUD(currentLevel);
+  document.getElementById('hud').style.display = 'flex';
+  document.getElementById('controls-hint').style.display = 'block';
+
+  gameRunning = true;
+  requestAnimationFrame(gameLoop);
+}
+
+function gameOver(msg) {
+  if (!gameRunning) return;
+  gameRunning = false;
+  document.getElementById('game-over-msg').textContent = msg || '被防火墙拦截，入侵失败';
+  document.getElementById('hud').style.display = 'none';
+  document.getElementById('game-over-screen').style.display = 'flex';
+}
+
+function restartLevel() {
+  document.getElementById('game-over-screen').style.display = 'none';
+  initLevel();
+}
+
+function winGame() {
+  if (!gameRunning) return;
+  gameRunning = false;
+  document.getElementById('hud').style.display = 'none';
+  document.getElementById('controls-hint').style.display = 'none';
+  showDialogue(DLG.ending, () => { document.getElementById('win-screen').style.display = 'flex'; });
+}
+</script>
+</body>
+</html>
